@@ -36,19 +36,45 @@ This repo documents:
 Automated Layer A filter using ffprobe. Checks resolution, frame rate, bitrate, duration, and codec against configurable thresholds. Returns pass/fail per dimension with actionable output.
 
 ```bash
-python scripts/technical_check.py --input ./videos --config config.yaml
+python technical_check.py <video_folder>
 ```
 
-### `scripts/motion_blur_detect.py`
-Layer B visual quality detection. Current implementation uses Laplacian variance (v1). Known limitation: high-texture backgrounds inflate scores, causing false negatives in industrial scenes.
+### `scripts/motion_blur_detect.py` (v1)
+Layer B visual quality detection — full-frame Laplacian variance implementation.
 
-**Planned improvements:**
-- **v2:** ROI-based detection — isolate hand region via MediaPipe Hand Landmark before computing sharpness score, eliminating background texture interference
-- **v3:** Optical flow analysis — measure motion velocity between frames rather than static sharpness, enabling distinction between hand-motion blur (operator issue) and tool-vibration blur (not operator issue)
+Known limitation: high-texture backgrounds (metal grids, wood grain, patterned fabric) inflate the per-frame variance score, masking blur in the hand region. Use as a rough first-pass filter only.
 
 ```bash
-python scripts/motion_blur_detect.py --input ./videos --output ./reports
+python motion_blur_detect.py <video_file>
+python motion_blur_detect.py <video_folder>    # batch mode
 ```
+
+### `scripts/motion_blur_detect_v2.py` (v2 — recommended)
+Layer B visual quality detection — ROI-based implementation.
+
+Instead of scoring the full frame, v2 first localises the hand region via HSV skin colour segmentation, then computes Laplacian variance only within that bounding box. Background texture no longer affects the score. Also flags frames where no hand is detected as `HAND_NOT_VISIBLE` — a distinct quality issue from blur.
+
+```bash
+python motion_blur_detect_v2.py <video_file>
+python motion_blur_detect_v2.py <video_folder>    # batch mode
+```
+
+**Validated on a set of egocentric manipulation clips across varied industrial scene types. Real-world accuracy by scene type:**
+
+| Scene type | V2 reliability | Notes |
+|---|---|---|
+| Dark skin + light/neutral background | ✅ Reliable | Core use case |
+| Full-frame camera shake | ⚠️ May miss | Planned: V3 optical flow |
+| Dark skin + dark background | ⚠️ Over-reports | Low contrast and blur produce similar Laplacian scores |
+| Light skin + light background | ❌ ROI mislocation | Skin segmentation picks up background instead of hand |
+| High-texture background | ❌ May miss blur | Background patterns interfere with ROI detection |
+
+**V1 vs V2 — when to use which:**
+- Use **v2** when operators have darker skin tones working on light or neutral surfaces
+- Use **v1** as a rough first-pass for all other scene types until v3 is available
+- Both versions produce a CSV report and a sharpness curve chart (PNG)
+
+**Planned v3:** Optical flow analysis — measures motion velocity between frames rather than static sharpness. Will be colour-agnostic and will distinguish hand-motion blur (operator issue) from tool-vibration blur (not operator fault).
 
 ---
 
@@ -96,9 +122,9 @@ The methodology is domain-agnostic at the framework level — the 4-layer struct
 |-----------|--------|
 | 4-layer framework | ✅ Complete |
 | `technical_check.py` (Layer A) | ✅ Working |
-| `motion_blur_detect.py` v1 (Layer B) | ✅ Working (known limitations) |
-| `motion_blur_detect.py` v2 — ROI-based | 🔧 In progress |
-| `motion_blur_detect.py` v3 — Optical flow | 📐 Designed, pending implementation |
+| `motion_blur_detect.py` v1 (Layer B) | ✅ Working (known limitations documented) |
+| `motion_blur_detect_v2.py` v2 (Layer B) | ✅ Working (validated across varied scene types) |
+| `motion_blur_detect` v3 — Optical flow | 📐 Designed, pending implementation |
 | Guideline audit framework | ✅ Complete |
 | Layer D value density framework | 📄 Documented in `/docs` |
 
@@ -106,4 +132,4 @@ The methodology is domain-agnostic at the framework level — the 4-layer struct
 
 ## Contact
 
-Louise Wang · [LinkedIn](https://www.linkedin.com/in/louiseluyingwang) · USC Marshall MSBA
+Louise Wang · [LinkedIn](https://linkedin.com/in/louiseluyingwang/) · USC Marshall MSBA
